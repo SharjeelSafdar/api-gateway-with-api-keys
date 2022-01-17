@@ -17,7 +17,7 @@ export class ApiKeysPocStack extends Stack {
     });
 
     const userpool = new cognito.UserPool(this, "myUserpool");
-    userpool.addClient("myUserpoolClient", {
+    const userpoolClient = userpool.addClient("myUserpoolClient", {
       authFlows: {
         userPassword: true,
       },
@@ -28,23 +28,40 @@ export class ApiKeysPocStack extends Stack {
       },
     });
 
-    const defaultAuthorizer = new apigwAuth.HttpUserPoolAuthorizer(
+    const authorizer = new apigwAuth.HttpUserPoolAuthorizer(
       "myAuthorizer",
-      userpool
+      userpool,
+      {
+        userPoolClients: [userpoolClient],
+        userPoolRegion: this.region,
+        identitySource: ["$request.header.Authorization"],
+      }
     );
 
     const api = new apigw.HttpApi(this, "MyApi", {
       apiName: "test-api-for-api-keys",
-      defaultAuthorizer,
     });
 
+    // This route requires no authorization
     api.addRoutes({
-      path: "/foo",
+      path: "/open",
       integration: new apigwInteg.HttpLambdaIntegration(
         "lambdaInteg",
         myLambda
       ),
       methods: [apigw.HttpMethod.GET],
+    });
+
+    // This route requires authorization
+    api.addRoutes({
+      path: "/closed",
+      integration: new apigwInteg.HttpLambdaIntegration(
+        "lambdaInteg",
+        myLambda
+      ),
+      methods: [apigw.HttpMethod.GET],
+      authorizer,
+      authorizationScopes: ["email"],
     });
   }
 }
